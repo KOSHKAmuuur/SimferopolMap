@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Интерактивная карта религиозной архитектуры Симферополя</title>
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Leaflet Routing Machine CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Подключение шрифта Inter -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&display=swap">
+  <style>
+    /* Применяем шрифт Inter ко всем элементам */
+    body, h1, h3, p, button, input, select {
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* Улучшенный градиентный фон */
+    body {
+      background: linear-gradient(to bottom, #f7fafc, #e6e8f0);
+      min-height: 100vh;
+    }
+
+    /* Высота карты */
+    #map { 
+      height: 650px; 
+      border-radius: 2rem;
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+      transition: transform 0.3s ease;
+    }
+    #map:hover {
+      transform: scale(1.02); /* Увеличенный эффект масштабирования для ПК */
+    }
+
+    /* Стиль для попапов с анимацией */
+    .leaflet-popup-content-wrapper {
+      border-radius: 1rem;
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+      animation: fadeIn 0.3s ease-in-out;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .popup-carousel { 
+      max-width: 280px; /* Увеличено для ПК */
+      overflow-x: auto; 
+      white-space: nowrap; 
+      padding: 0.5rem;
+    }
+    .popup-carousel img { 
+      display: inline-block; 
+      margin-right: 8px; 
+      border-radius: 0.75rem;
+      transition: transform 0.2s ease;
+    }
+    .popup-carousel img:hover {
+      transform: scale(1.1);
+    }
+
+    /* Цветовые индикаторы для попапов */
+    .popup-temple {
+      border-left: 4px solid #7f9cf5; /* Синий для храмов */
+    }
+    .popup-chapel {
+      border-left: 4px solid #9ae6b4; /* Светло-зеленый для часовен */
+    }
+    .popup-muslim {
+      border-left: 4px solid #f6ad55; /* Оранжевый для мечетей */
+    }
+    .popup-synagogue {
+      border-left: 4px solid #d4a5f9; /* Лавандовый для синагог */
+    }
+
+    /* Стили для модального окна QR-кода */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 2000;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-content {
+      background-color: #fff;
+      padding: 2rem;
+      border-radius: 1rem;
+      text-align: center;
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+    }
+    .modal-content button {
+      margin-top: 1rem;
+      background-color: #a3bffa;
+      color: #fff;
+      padding: 0.5rem 1rem;
+      border-radius: 0.5rem;
+    }
+    .modal-content button:hover {
+      background-color: #7f9cf5;
+    }
+
+    /* Медиа-запрос для мобильных устройств */
+    @media (max-width: 640px) {
+      #map { 
+        height: 400px; /* Уменьшено для мобильных */
+        border-radius: 1.5rem; 
+      }
+      .popup-carousel { 
+        max-width: 180px; /* Увеличено для читаемости */
+      }
+      .leaflet-popup-content-wrapper {
+        max-height: 250px;
+      }
+      .route-controls select {
+        width: 100%; /* Полная ширина для выпадающих списков */
+        margin-bottom: 0.5rem;
+      }
+      .route-controls button {
+        width: 48%; /* Кнопки занимают половину ширины */
+      }
+      .filter-controls {
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .filter-controls button {
+        width: 100%;
+      }
+      .modal-content {
+        width: 90%;
+        padding: 1rem;
+      }
+    }
+
+    /* Стили для заголовка */
+    h1 {
+      font-weight: 400;
+      color: #2d3748;
+      letter-spacing: 0.05em;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Стили для кнопок с анимацией */
+    button {
+      background-color: #a3bffa;
+      color: #ffffff;
+      border-radius: 1rem;
+      padding: 0.75rem 1.5rem;
+      font-weight: 400;
+      transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+    }
+    button:hover {
+      background-color: #7f9cf5;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(127, 156, 245, 0.3);
+    }
+
+    /* Стили для поля ввода и выпадающих списков */
+    input, select {
+      border: 1px solid #e2e8f0;
+      border-radius: 1rem;
+      padding: 0.75rem 1.25rem;
+      font-weight: 300;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+    input:focus, select:focus {
+      border-color: #a3bffa;
+      box-shadow: 0 0 0 4px rgba(163, 191, 250, 0.3);
+    }
+
+    /* Контейнер для переключения слоев и центрирования */
+    .map-controls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    /* Стили для фильтров */
+    .filter-controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.75rem; /* Увеличено для ПК */
+    }
+
+    /* Стили для маршрутов */
+    .route-controls {
+      margin-top: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.75rem; /* Увеличено для ПК */
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  <div class="container mx-auto p-6">
+    <h1 class="text-4xl text-center mb-8 text-gray-800 drop-shadow">
+      Религиозная архитектура Симферополя
+    </h1>
+    <!-- Поиск и фильтры -->
+    <div class="mb-6 flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-4">
+      <input
+        id="search"
+        type="text"
+        placeholder="Поиск по названию..."
+        class="px-4 py-2 w-full sm:w-72"
+        oninput="searchMarkers()"
+      />
+      <div class="filter-controls">
+        <button onclick="filterMarkers('all')" class="px-4 py-2">Все</button>
+        <button onclick="filterMarkers('orthodox-temple')" class="px-4 py-2">Храмы</button>
+        <button onclick="filterMarkers('orthodox-chapel')" class="px-4 py-2">Часовни</button>
+        <button onclick="filterMarkers('muslim')" class="px-4 py-2">Мусульманские</button>
+        <button onclick="filterMarkers('synagogue')" class="px-4 py-2">Синагоги</button>
+        <button onclick="showQRCode()" class="px-4 py-2">QR-код</button>
+      </div>
+    </div>
+    <!-- Контролы маршрутов -->
+    <div class="route-controls">
+      <select id="start-point" class="px-4 py-2 w-full sm:w-64">
+        <option value="">Выберите начальную точку</option>
+      </select>
+      <select id="end-point" class="px-4 py-2 w-full sm:w-64">
+        <option value="">Выберите конечную точку</option>
+      </select>
+      <button onclick="buildRoute()" class="px-4 py-2">Маршрут</button>
+      <button onclick="clearRoute()" class="px-4 py-2">Очистить</button>
+    </div>
+    <!-- Карта -->
+    <div id="map" class="mt-6"></div>
+    <!-- Контролы карты -->
+    <div class="map-controls">
+      <button onclick="changeBaseMap('standard')" class="px-3 py-1 text-sm">Стандарт</button>
+      <button onclick="changeBaseMap('satellite')" class="px-3 py-1 text-sm">Спутник</button>
+      <button onclick="changeBaseMap('terrain')" class="px-3 py-1 text-sm">Рельеф</button>
+      <button onclick="centerMap()" class="px-3 py-1 text-sm">Центр</button>
+    </div>
+    <!-- Модальное окно для QR-кода -->
+    <div id="qrModal" class="modal">
+      <div class="modal-content">
+        <h3 class="text-lg font-bold mb-4">Сканируйте QR-код</h3>
+        <div id="qrcode"></div>
+        <p class="text-sm text-gray-600 mt-2">Примечание: QR-код заработает после размещения карты онлайн. Замените URL в коде на ваш публичный адрес (например, https://your-site.com/simferopol.html).</p>
+        <button onclick="closeQRCode()">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Leaflet Routing Machine JS -->
+  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+  <!-- QRCode.js для генерации QR-кода -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+  <script>
+    // Инициализация карты
+    const map = L.map('map', { zoomControl: false }).setView([44.9478, 34.1000], 12);
+
+    // Базовые слои
+    const standardLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    });
+    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+    });
+    const terrainLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenTopoMap (www.opentopomap.org)'
+    });
+
+    // Установка стандартного слоя
+    let currentLayer = standardLayer;
+    currentLayer.addTo(map);
+
+    // Функция переключения слоев
+    function changeBaseMap(type) {
+      map.removeLayer(currentLayer);
+      if (type === 'standard') currentLayer = standardLayer;
+      else if (type === 'satellite') currentLayer = satelliteLayer;
+      else if (type === 'terrain') currentLayer = terrainLayer;
+      currentLayer.addTo(map);
+    }
+
+    // Функция центрирования карты
+    function centerMap() {
+      map.setView([44.9478, 34.1000], 12, { animate: true });
+    }
+
+    // Кастомные иконки (локальные файлы)
+    const templeIcon = L.icon({
+      iconUrl: 'cross.png',
+      iconSize: [32, 32],
+      iconAnchor: [16, 32],
+      popupAnchor: [0, -32]
+    });
+    const chapelIcon = L.icon({
+      iconUrl: 'chapel.png',
+      iconSize: [32, 32],
+      iconAnchor: [16, 32],
+      popupAnchor: [0, -32]
+    });
+    const muslimIcon = L.icon({
+      iconUrl: 'crescent.png',
+      iconSize: [32, 32],
+      iconAnchor: [16, 32],
+      popupAnchor: [0, -32]
+    });
+    const synagogueIcon = L.icon({
+      iconUrl: 'star-david.png',
+      iconSize: [32, 32],
+      iconAnchor: [16, 32],
+      popupAnchor: [0, -32]
+    });
+
+    // Данные религиозных объектов
+    const places = [
+      {
+        name: 'Церковь Вениамина, митрополита Петроградского',
+        coords: [44.975220, 34.096342],
+        type: 'orthodox-temple',
+        description: 'Адрес: ул. Киевская, 139Б/2. Построена в 2000-х годах в честь Вениамина, митрополита Петроградского, канонизированного как священномученик.',
+        images: ['benjamin-church-1.jpg', 'benjamin-church-2.jpg'],
+        icon: templeIcon,
+        fact: 'Названа в честь митрополита, расстрелянного в 1922 году за сопротивление изъятию церковных ценностей.'
+      },
+      {
+        name: 'Церковь святителя Луки',
+        coords: [44.960266, 34.088397],
+        type: 'orthodox-temple',
+        description: 'Адрес: 799-й квартал. Основана в 2002 году у больницы, посвящена святителю Луке, архиепископу Крымскому, врачу и святому.',
+        images: ['saint-luke-1.jpg', 'saint-luke-2.jpg'],
+        icon: templeIcon,
+        fact: 'Святитель Лука совмещал хирургию с духовным служением, оперируя раненых в годы войны.'
+      },
+      {
+        name: 'Кафедральный собор Петра и Павла',
+        coords: [44.949774, 34.105247],
+        type: 'orthodox-temple',
+        description: 'Адрес: ул. Пролетарская, 7. Построен в 1866 году в русском стиле, пережил советские годы и восстановлен в 1990-х.',
+        images: ['peter-paul-1.jpg', 'peter-paul-2.jpg'],
+        icon: templeIcon,
+        fact: 'Колокольный звон собора был слышен по всему городу в XIX веке.'
+      },
+      {
+        name: 'Часовня святителя Луки Исповедника',
+        coords: [44.949085, 34.105575],
+        type: 'orthodox-chapel',
+        description: 'Адрес: ул. Курчатова, 1. Построена в память о святителе Луке, расположена рядом с больницей.',
+        images: ['luka-chapel-1.jpg', 'luka-chapel-2.jpg'],
+        icon: chapelIcon,
+        fact: 'Стала местом молитв врачей и пациентов, вдохновленных подвигом Луки.'
+      },
+      {
+        name: 'Свято-Троицкий женский монастырь',
+        coords: [44.949055, 34.103962],
+        type: 'orthodox-temple',
+        description: 'Адрес: Большевистская ул., 9. Основан в 1868 году, хранит мощи святителя Луки, паломнический центр.',
+        images: ['holy-trinity-1.jpg', 'holy-trinity-2.jpg'],
+        icon: templeIcon,
+        fact: 'В советское время здесь был детский дом, возвращен церкви в 1990-х.'
+      },
+      {
+        name: 'Церковь Константина и Елены',
+        coords: [44.951015, 34.103763],
+        type: 'orthodox-temple',
+        description: 'Адрес: Петропавловская ул., 8А. Построена в 1785 году греческими переселенцами, первая церковь города.',
+        images: ['constantine-helena-1.jpg', 'constantine-helena-2.jpg'],
+        icon: templeIcon,
+        fact: 'Возведена после русско-турецкой войны для греческой общины.'
+      },
+      {
+        name: 'Церковь святой Марии Магдалины',
+        coords: [44.920929, 34.121157],
+        type: 'orthodox-temple',
+        description: 'Адрес: Военно-историческое кладбище. Построена на месте захоронений солдат Крымской войны (1853–1856).',
+        images: ['maria-magdalene-1.jpg', 'maria-magdalene-2.jpg'],
+        icon: templeIcon,
+        fact: 'Похоронено более 36 тысяч солдат, церковь — символ памяти.'
+      },
+      {
+        name: 'Церковь Державной иконы Божией Матери',
+        coords: [44.977295, 34.130045],
+        type: 'orthodox-temple',
+        description: 'Адрес: ул. Бела Куна, 21А. Построена в 2000-х, посвящена иконе "Державная", явленной в 1917 году.',
+        images: ['derzhavnaya-1.jpg', 'derzhavnaya-2.jpg'],
+        icon: templeIcon,
+        fact: 'Икона найдена в день отречения Николая II, символ защиты.'
+      },
+      {
+        name: 'Часовня Луки Войно-Ясенецкого',
+        coords: [44.957370, 34.115410],
+        type: 'orthodox-chapel',
+        description: 'Адрес: Киевский район. Построена в 2010-х в честь святителя Луки, архиепископа Крымского.',
+        images: ['luka-chapel-3.jpg', 'luka-chapel-4.jpg'],
+        icon: chapelIcon,
+        fact: 'Лука написал более 50 трудов по хирургии, известен как "святой доктор".'
+      },
+      {
+        name: 'Часовня Георгия Победоносца',
+        coords: [44.956289, 34.103684],
+        type: 'orthodox-chapel',
+        description: 'Адрес: ул. Дзержинского, 5. Построена в 2000-х, посвящена Георгию Победоносцу, покровителю воинов.',
+        images: ['georgiy-chapel-1.jpg', 'georgiy-chapel-2.jpg'],
+        icon: chapelIcon,
+        fact: 'Образ Георгия на гербе Москвы, популярен в Крыму.'
+      },
+      {
+        name: 'Кафедральный Александро-Невский собор',
+        coords: [44.952868, 34.098171],
+        type: 'orthodox-temple',
+        description: 'Адрес: ул. Александра Невского, 6. Восстановлен в 2009 году, купола сияют золотом.',
+        images: ['alexander-nevsky-1.jpg', 'alexander-nevsky-2.jpg'],
+        icon: templeIcon,
+        fact: 'Первый собор на этом месте был разрушен в 1930-х.'
+      },
+      {
+        name: 'Церковь Трех Святителей Великих',
+        coords: [44.949337, 34.094494],
+        type: 'orthodox-temple',
+        description: 'Адрес: ул. Гоголя, 16. Построена в 1870 году, украшена мозаиками.',
+        images: ['three-saints-1.jpg', 'three-saints-2.jpg'],
+        icon: templeIcon,
+        fact: 'Любила студентами семинарий за покровительство образованию.'
+      },
+      {
+        name: 'Старообрядческая церковь Введения во храм Пресвятой Богородицы',
+        coords: [44.947089, 34.102001],
+        type: 'orthodox-temple',
+        description: 'Адрес: ул. Сергеева-Ценского, 3. Построена старообрядцами в начале XX века.',
+        images: ['staroobryad-church-1.jpg', 'staroobryad-church-2.jpg'],
+        icon: templeIcon,
+        fact: 'Сохраняет древние традиции богослужения.'
+      },
+      {
+        name: 'Церковь Всех Святых',
+        coords: [44.941358, 34.089494],
+        type: 'orthodox-temple',
+        description: 'Адрес: Учебный пер., 5. Построена в 1859 году на старинном кладбище.',
+        images: ['all-saints-1.jpg', 'all-saints-2.jpg'],
+        icon: templeIcon,
+        fact: 'Сохраняет могилы участников Крымской войны.'
+      },
+      {
+        name: 'Часовня царственных страстотерпцев',
+        coords: [44.939558, 34.093648],
+        type: 'orthodox-chapel',
+        description: 'Адрес: Севастопольская ул., 21. Построена в 2018 году в честь семьи Николая II.',
+        images: ['tsar-chapel-1.jpg', 'tsar-chapel-2.jpg'],
+        icon: chapelIcon,
+        fact: 'Возведена к 100-летию гибели царской семьи.'
+      },
+      {
+        name: 'Свято-Никольский храм',
+        coords: [44.955479, 34.095356],
+        type: 'orthodox-temple',
+        description: 'Адрес: ул. Александра Невского, 19. Посвящен Николаю Чудотворцу, построен в XIX веке.',
+        images: ['nikolskiy-temple-1.jpg', 'nikolskiy-temple-2.jpg'],
+        icon: templeIcon,
+        fact: 'Посещали моряки перед плаваниями.'
+      },
+      {
+        name: 'Церковь-часовня иконы Божией Матери Неопалимая Купина',
+        coords: [44.975628, 34.115411],
+        type: 'orthodox-chapel',
+        description: 'Адрес: Кечкеметская ул., 103. Посвящена иконе "Неопалимая Купина", защитнице от огня.',
+        images: ['neopalimaya-kupina-1.jpg', 'neopalimaya-kupina-2.jpg'],
+        icon: chapelIcon,
+        fact: 'Связана с библейским сюжетом о горящем кусте.'
+      },
+      {
+        name: 'Храм святых мучеников 14000 Вифлеемских младенцев',
+        coords: [44.934394, 34.091466],
+        type: 'orthodox-temple',
+        description: 'Адрес: парк им. Т. Г. Шевченко. Построен в 2000-х, посвящен младенцам, убитым Иродом.',
+        images: ['bethlehem-martyrs-1.jpg', 'bethlehem-martyrs-2.jpg'],
+        icon: templeIcon,
+        fact: 'Считаются первыми мучениками за Христа.'
+      },
+      {
+        name: 'Мечеть Кебир-Джами',
+        coords: [44.948922, 34.107225],
+        type: 'muslim',
+        description: 'Адрес: ул. Курчатова, 4. Построена в 1508 году, старейшая мечеть Крыма.',
+        images: ['kebir-jami-1.jpg', 'kebir-jami-2.jpg'],
+        icon: muslimIcon,
+        fact: 'Построена при хане Менгли Герае, центр мусульманской общины.'
+      },
+      {
+        name: 'Мечеть Аджи-Сеит-Нафе',
+        coords: [44.938110, 34.107361],
+        type: 'muslim',
+        description: 'Адрес: Колодезный пер., 3. Построена в XIX веке для местной общины.',
+        images: ['adji-seit-nafe-1.jpg', 'adji-seit-nafe-2.jpg'],
+        icon: muslimIcon,
+        fact: 'Названа в честь мецената, поддерживавшего мечети.'
+      },
+      {
+        name: 'Мечеть Сейит-Сеттар',
+        coords: [44.938997, 34.100033],
+        type: 'muslim',
+        description: 'Адрес: ул. Клары Цеткин, 34. Построена в 1850 году рядом с медресе.',
+        images: ['seit-settar-1.jpg', 'seit-settar-2.jpg'],
+        icon: muslimIcon,
+        fact: 'Медресе было центром исламского образования.'
+      },
+      {
+        name: 'Симферопольская соборная мечеть',
+        coords: [44.928601, 34.138273],
+        type: 'muslim',
+        description: 'Адрес: Ялтинская ул., 22. Открыта в 2023 году, вдохновлена Айя-Софией.',
+        images: ['simferopol-mosque-1.jpg', 'simferopol-mosque-2.jpg'],
+        icon: muslimIcon,
+        fact: 'Вмещает до 4000 человек, украшена мозаиками.'
+      },
+      {
+        name: 'Мечеть Айше Султан',
+        coords: [44.985678, 34.095417],
+        type: 'muslim',
+        description: 'Адрес: микрорайон Крымская Роза. Построена в 2010-х для общины.',
+        images: ['aishe-sultan-1.jpg', 'aishe-sultan-2.jpg'],
+        icon: muslimIcon,
+        fact: 'Названа в честь легендарной благотворительницы.'
+      },
+      {
+        name: 'Мечеть имени имама Азама Абу Ханифы',
+        coords: [44.991326, 34.165144],
+        type: 'muslim',
+        description: 'Адрес: ул. Сейдали Куртсеитова, 20. Посвящена Абу Ханифе, построена в 2010-х.',
+        images: ['abu-hanifa-1.jpg', 'abu-hanifa-2.jpg'],
+        icon: muslimIcon,
+        fact: 'Абу Ханифа — почитаемый богослов VIII века.'
+      },
+      {
+        name: 'Чукурча-джами',
+        coords: [44.959082, 34.142538],
+        type: 'muslim',
+        description: 'Адрес: Луговая ул., 44. Небольшая мечеть XIX века в историческом районе.',
+        images: ['chukurcha-jami-1.jpg', 'chukurcha-jami-2.jpg'],
+        icon: muslimIcon,
+        fact: 'Название связано с местным источником для фонтанов.'
+      },
+      {
+        name: 'Еврейская религиозная община города Симферополя',
+        coords: [44.941737, 34.102307],
+        type: 'synagogue',
+        description: 'Адрес: Краснознамённая ул., 78. Основана в 1990-х годах, служит центром ортодоксального иудаизма в Симферополе.',
+        images: ['simferopol-synagogue-1.jpg', 'simferopol-synagogue-2.jpg'],
+        icon: synagogueIcon,
+        fact: 'Община активно участвует в возрождении еврейской культуры в Крыму.'
+      },
+      {
+        name: 'Еврейский молитвенный дом Нер-Томид',
+        coords: [44.942151, 34.107935],
+        type: 'synagogue',
+        description: 'Адрес: ул. Сергеева-Ценского, 61. Построен в начале XX века, название означает "Вечный Свет".',
+        images: ['ner-tomid-1.jpg', 'ner-tomid-2.jpg'],
+        icon: synagogueIcon,
+        fact: 'Нер-Томид — символ вечного присутствия Бога в синагоге.'
+      }
+    ];
+
+    // Слой для маркеров
+    const markersLayer = L.layerGroup().addTo(map);
+
+    // Переменная для хранения маршрута
+    let routingControl = null;
+
+    // Заполнение выпадающих списков для маршрутов
+    const startSelect = document.getElementById('start-point');
+    const endSelect = document.getElementById('end-point');
+    places.forEach((place, index) => {
+      const option1 = document.createElement('option');
+      option1.value = index;
+      option1.text = place.name;
+      startSelect.appendChild(option1);
+
+      const option2 = document.createElement('option');
+      option2.value = index;
+      option2.text = place.name;
+      endSelect.appendChild(option2);
+    });
+
+    // Функция построения маршрута
+    function buildRoute() {
+      const startIndex = startSelect.value;
+      const endIndex = endSelect.value;
+
+      if (startIndex === '' || endIndex === '' || startIndex === endIndex) {
+        alert('Пожалуйста, выберите разные начальную и конечную точки.');
+        return;
+      }
+
+      const startCoords = places[startIndex].coords;
+      const endCoords = places[endIndex].coords;
+
+      // Удаляем старый маршрут, если он существует
+      if (routingControl) {
+        map.removeControl(routingControl);
+      }
+
+      // Создаем новый маршрут
+      routingControl = L.Routing.control({
+        waypoints: [
+          L.latLng(startCoords[0], startCoords[1]),
+          L.latLng(endCoords[0], endCoords[1])
+        ],
+        routeWhileDragging: true,
+        lineOptions: {
+          styles: [{ color: '#c3a6f2', opacity: 0.8, weight: 5, shadowBlur: 10, shadowColor: '#000000' }]
+        },
+        show: false,
+        addWaypoints: false,
+        fitSelectedRoutes: true,
+        showAlternatives: false
+      }).addTo(map);
+    }
+
+    // Функция очистки маршрута
+    function clearRoute() {
+      if (routingControl) {
+        map.removeControl(routingControl);
+        routingControl = null;
+      }
+      startSelect.value = '';
+      endSelect.value = '';
+    }
+
+    // Функция показа QR-кода
+    function showQRCode() {
+      const modal = document.getElementById('qrModal');
+      const qrCodeDiv = document.getElementById('qrcode');
+      qrCodeDiv.innerHTML = ''; // Очищаем предыдущий QR-код
+
+      // Замените этот URL на реальный адрес вашей карты после размещения онлайн
+      const mapUrl = 'https://github.com/KOSHKAmuuur/SimferopolReligiousMap.git'; // Замените на ваш публичный URL
+      QRCode.toCanvas(qrCodeDiv, mapUrl, { width: 200 }, function (error) {
+        if (error) console.error(error);
+      });
+
+      modal.style.display = 'flex';
+    }
+
+    // Функция закрытия QR-кода
+    function closeQRCode() {
+      const modal = document.getElementById('qrModal');
+      modal.style.display = 'none';
+    }
+
+    // Добавление маркеров
+    function renderMarkers(filteredPlaces) {
+      markersLayer.clearLayers();
+      filteredPlaces.forEach(place => {
+        const popupClass = place.type === 'orthodox-temple' ? 'popup-temple' : 
+                          place.type === 'orthodox-chapel' ? 'popup-chapel' : 
+                          place.type === 'muslim' ? 'popup-muslim' : 'popup-synagogue';
+        const marker = L.marker(place.coords, { icon: place.icon, type: place.type })
+          .bindPopup(`
+            <div class="p-3 max-w-xs ${popupClass}">
+              <h3 class="font-bold text-lg text-gray-800">${place.name}</h3>
+              <p class="text-sm text-gray-600">${place.description}</p>
+              <p class="text-xs text-gray-500 italic mt-1">${place.fact}</p>
+              <div class="popup-carousel mt-2">
+                ${place.images.map(img => `
+                  <img src="${img}" alt="${place.name}" class="h-20 rounded">
+                `).join('')}
+              </div>
+            </div>
+          `)
+          .on('click', () => {
+            map.flyTo(place.coords, 15, { duration: 1.5 });
+          });
+        markersLayer.addLayer(marker);
+      });
+    }
+
+    // Изначальная отрисовка всех маркеров
+    renderMarkers(places);
+
+    // Функция фильтрации
+    function filterMarkers(type) {
+      const filtered = type === 'all' ? places : places.filter(place => place.type === type);
+      renderMarkers(filtered);
+    }
+
+    // Функция поиска
+    function searchMarkers() {
+      const query = document.getElementById('search').value.toLowerCase();
+      const filtered = places.filter(place => place.name.toLowerCase().includes(query));
+      renderMarkers(filtered);
+    }
+  </script>
+</body>
+</html>
