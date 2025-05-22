@@ -253,7 +253,7 @@
       <div class="modal-content">
         <h3 class="text-lg font-bold mb-4">Сканируйте QR-код</h3>
         <div id="qrcode"></div>
-        <p class="text-sm text-gray-600 mt-2">Примечание: QR-код заработает после размещения карты онлайн. Замените URL в коде на ваш публичный адрес (например, https://your-site.com/simferopol.html).</p>
+        <p id="qrDebug" class="text-sm text-gray-600 mt-2"></p>
         <button onclick="closeQRCode()">Закрыть</button>
       </div>
     </div>
@@ -264,7 +264,7 @@
   <!-- Leaflet Routing Machine JS -->
   <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
   <!-- QRCode.js для генерации QR-кода -->
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script>
     // Инициализация карты
     const map = L.map('map', { zoomControl: false }).setView([44.9478, 34.1000], 12);
@@ -641,13 +641,28 @@
     function showQRCode() {
       const modal = document.getElementById('qrModal');
       const qrCodeDiv = document.getElementById('qrcode');
+      const qrDebug = document.getElementById('qrDebug');
       qrCodeDiv.innerHTML = ''; // Очищаем предыдущий QR-код
 
-      // Замените этот URL на реальный адрес вашей карты после размещения онлайн
-      const mapUrl = 'https://github.com/KOSHKAmuuur/SimferopolReligiousMap.git'; // Замените на ваш публичный URL
-      QRCode.toCanvas(qrCodeDiv, mapUrl, { width: 200 }, function (error) {
-        if (error) console.error(error);
-      });
+      // Динамический URL текущей страницы
+      const mapUrl = window.location.href;
+      console.log('Генерируем QR-код для URL:', mapUrl);
+
+      try {
+        // Используем QRCode.js для генерации QR-кода
+        new QRCode(qrCodeDiv, {
+          text: mapUrl,
+          width: 200,
+          height: 200,
+          colorDark: "#000000",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.H
+        });
+        qrDebug.textContent = `QR-код сгенерирован для: ${mapUrl}`;
+      } catch (error) {
+        console.error('Ошибка при генерации QR-кода:', error);
+        qrDebug.textContent = 'Ошибка при генерации QR-кода. Проверьте консоль.';
+      }
 
       modal.style.display = 'flex';
     }
